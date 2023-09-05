@@ -89,6 +89,7 @@ target/
 __pycache__/
 local_settings.py
 
+.idea
 .env
 db.sqlite3
 media/
