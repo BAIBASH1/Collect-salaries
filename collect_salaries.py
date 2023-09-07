@@ -2,11 +2,13 @@ import requests
 import os
 from dotenv import load_dotenv
 from terminaltables import AsciiTable
+import math
+import time
 
 
 BASE_URL_HH = 'https://api.hh.ru/vacancies'
 BASE_URL_SJ = 'https://api.superjob.ru/2.0/vacancies/'
-PROGRAMMING_LANG = [
+PROGRAMMING_LANGS = [
     'JavaScript',
     'Java',
     'Python',
@@ -17,29 +19,26 @@ PROGRAMMING_LANG = [
     'C',
     'Go'
 ]
-load_dotenv()
-SECRET_KEY_SJ = os.environ['SECRET_KEY_SJ']
+
 
 
 def predict_salary(salary_from, salary_to):
-    if salary_to or salary_from:
-        if not salary_from:
-            predicted_salary = salary_to * 0.8
-        elif not salary_to:
-            predicted_salary = salary_from * 1.2
-        else:
-            predicted_salary = (salary_to + salary_from) / 2
-    else:
-        predicted_salary = None
-
+    if salary_from and salary_to:
+        predicted_salary = (salary_to + salary_from) / 2
+        return predicted_salary
+    if salary_to:
+        predicted_salary = salary_to * 0.8
+        return predicted_salary
+    if salary_from:
+        predicted_salary = salary_from * 1.2
+        return predicted_salary
+    predicted_salary = None
     return predicted_salary
 
 
 def predict_rub_salary_hh(vacancy):
     vacancy_salary = vacancy['salary']
-    if not vacancy_salary:
-        predicted_salary = vacancy_salary
-    elif vacancy_salary['currency'] != 'RUR':
+    if not vacancy_salary or vacancy_salary['currency'] != 'RUR':
         predicted_salary = None
     else:
         predicted_salary = predict_salary(vacancy_salary['from'], vacancy_salary['to'])
@@ -60,13 +59,8 @@ def process_page_hh(response):
     for vacancy in vacancies:
         predicted_salary = predict_rub_salary_hh(vacancy)
         if predicted_salary:
-            salaries.append(predicted_salary)
-    vacancies_processed = len(salaries)
-    try:
-        avg_salary = sum(salaries)/vacancies_processed
-    except ZeroDivisionError:
-        avg_salary = 0
-    return avg_salary, vacancies_processed
+            salaries.append(int(predicted_salary))
+    return salaries
 
 
 def process_page_sj(response):
@@ -75,112 +69,110 @@ def process_page_sj(response):
     for vacancy in vacancies:
         predicted_salary = predict_rub_salary_sj(vacancy)
         if predicted_salary:
-            salaries.append(predicted_salary)
-    vacancies_processed = len(salaries)
-    try:
-        avg_salary = sum(salaries)/vacancies_processed
-    except ZeroDivisionError:
-        avg_salary = 0
-    return avg_salary, vacancies_processed
+            salaries.append(int(predicted_salary))
+    return salaries
 
 
-def collect_all_pages_hh():
+def collect_salaries_hh():
     salaries_of_lang = {}
+    moscow_code_hh = 1
     params = {
         'text': 'Программист',
-        'area': 1,
+        'area': moscow_code_hh,
         'page': 0
     }
-    for lang in PROGRAMMING_LANG:
+    for lang in PROGRAMMING_LANGS:
+        total_salaries = []
         params['text'] = f'Программист {lang}'
-        response = requests.get(BASE_URL_HH, params=params)
-        response.raise_for_status()
-        vacancies = response.json()
-        pages = vacancies['pages']
-        vacancies_found = vacancies['found']
-        vacancies_processed_sum = 0
-        salary_sum = 0
-        average_salary = 0
-        for page in range(pages):
+        page = 0
+        while True:
             params['page'] = page
             response = requests.get(BASE_URL_HH, params=params)
             response.raise_for_status()
-            average_salary, vacancies_processed = process_page_hh(response)
-            vacancies_processed_sum += vacancies_processed
-            salary_sum += vacancies_processed * average_salary
+            time.sleep(0.5)
+            vacancies = response.json()
+            salaries = process_page_hh(response)
+            total_salaries += salaries
+            pages = vacancies['pages']
+            max_available_pages = 100
+            if page == pages - 1 or page > max_available_pages:
+                vacancies_found = vacancies['found']
+                break
+            page += 1
+        salary_sum = sum(total_salaries)
+        vacancies_processed = len(total_salaries)
         if salary_sum:
-            average_salary = salary_sum / vacancies_processed_sum
+            average_salary = salary_sum / vacancies_processed
         else:
             average_salary = 0
         salaries_of_lang[lang] = {
             "vacancies_found": vacancies_found,
-            "vacancies_processed": vacancies_processed_sum,
+            "vacancies_processed": vacancies_processed,
             "average_salary": int(average_salary)
         }
     return salaries_of_lang
 
 
-def collect_all_pages_sj():
+def collect_salaries_sj():
+    SECRET_KEY_SJ = os.environ['SECRET_KEY_SJ']
     headers = {
         'X-Api-App-Id': SECRET_KEY_SJ
     }
+    moscow_code_sj = 4
     params = {
         'text': 'Программист',
-        'town': 4
+        'town': moscow_code_sj
     }
     salaries_of_lang = {}
-    for lang in PROGRAMMING_LANG:
+    for lang in PROGRAMMING_LANGS:
+        total_salaries = []
         params['keywords'] = f'Программист {lang}'
-        response = requests.get(BASE_URL_SJ, headers=headers, params=params)
-        response.raise_for_status()
-        vacancies = response.json()
-        vacancies_found = vacancies['total']
-        vacancies_processed_sum = 0
-        salary_sum = 0
-        average_salary = 0
-        for page in range(int(vacancies_found/20)):
+        page = 0
+
+        while True:
             params['page'] = page
             response = requests.get(BASE_URL_SJ, headers=headers, params=params)
             response.raise_for_status()
             vacancies = response.json()
-            average_salary, vacancies_processed = process_page_sj(response)
-            vacancies_processed_sum += vacancies_processed
-            salary_sum += vacancies_processed * average_salary
+            salaries_sj = process_page_sj(response)
+            total_salaries += salaries_sj
+            vacancies_found = vacancies['total']
+            vacancies_on_page = 20
+            pages = math.ceil(vacancies_found / vacancies_on_page)
+            if page == pages:
+                break
+            page += 1
+        salary_sum = sum(total_salaries)
+        vacancies_processed = len(total_salaries)
         if salary_sum:
-            average_salary = salary_sum / vacancies_processed_sum
+            average_salary = salary_sum / vacancies_processed
         else:
             average_salary = 0
         salaries_of_lang[lang] = {
             "vacancies_found": vacancies_found,
-            "vacancies_processed": vacancies_processed_sum,
+            "vacancies_processed": vacancies_processed,
             "average_salary": int(average_salary)
         }
     return salaries_of_lang
 
 
-def get_tables_sj(salaries_of_lang):
+def get_tables(salaries_of_lang, site_name):
 
     table = [
         ['Язык программирования', 'Вакансий найдено', 'Вакансий обработано', 'Средняя зарплата']
     ]
     for lang, salary in salaries_of_lang.items():
         table.append([lang, salary['vacancies_found'], salary['vacancies_processed'], salary['average_salary']])
-    return AsciiTable(table, 'SuperJob Moscow').table
-
-def get_tables_hh(salaries_of_lang):
-    table = [
-        ['Язык программирования', 'Вакансий найдено', 'Вакансий обработано', 'Средняя зарплата']
-    ]
-    for lang, salary in salaries_of_lang.items():
-        table.append([lang, salary['vacancies_found'], salary['vacancies_processed'], salary['average_salary']])
-    return AsciiTable(table, 'HeadHunter Moscow').table
+    return AsciiTable(table, site_name).table
 
 
 def main():
-    salaries_sj = collect_all_pages_sj()
-    salaries_hh = collect_all_pages_hh()
-    print(get_tables_sj(salaries_sj))
-    print(get_tables_hh(salaries_hh))
+    salaries_sj = collect_salaries_sj()
+    print(get_tables(salaries_sj, 'Superjob Moscow'))
+    salaries_hh = collect_salaries_hh()
+    print(get_tables(salaries_hh, 'HeadHunter Moscow'))
+
 
 if __name__=='__main__':
+    load_dotenv()
     main()
