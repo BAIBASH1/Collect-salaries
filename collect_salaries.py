@@ -113,8 +113,7 @@ def collect_salaries_hh():
     return salaries_of_lang
 
 
-def collect_salaries_sj():
-    SECRET_KEY_SJ = os.environ['SECRET_KEY_SJ']
+def collect_salaries_sj(SECRET_KEY_SJ):
     headers = {
         'X-Api-App-Id': SECRET_KEY_SJ
     }
@@ -168,7 +167,8 @@ def get_tables(salaries_of_lang, site_name):
 
 def main():
     load_dotenv()
-    salaries_sj = collect_salaries_sj()
+    SECRET_KEY_SJ = os.environ['SECRET_KEY_SJ']
+    salaries_sj = collect_salaries_sj(SECRET_KEY_SJ)
     print(get_tables(salaries_sj, 'Superjob Moscow'))
     salaries_hh = collect_salaries_hh()
     print(get_tables(salaries_hh, 'HeadHunter Moscow'))
