@@ -53,9 +53,8 @@ def predict_rub_salary_sj(vacancy):
     return predicted_salary
 
 
-def process_page_hh(response):
+def process_page_hh(vacancies):
     salaries = []
-    vacancies = response.json()['items']
     for vacancy in vacancies:
         predicted_salary = predict_rub_salary_hh(vacancy)
         if predicted_salary:
@@ -63,14 +62,17 @@ def process_page_hh(response):
     return salaries
 
 
-def process_page_sj(response):
+def process_page_sj(vacancies):
     salaries = []
-    vacancies = response.json()['objects']
     for vacancy in vacancies:
         predicted_salary = predict_rub_salary_sj(vacancy)
         if predicted_salary:
             salaries.append(int(predicted_salary))
     return salaries
+
+
+
+
 
 
 def collect_salaries_hh():
@@ -90,13 +92,14 @@ def collect_salaries_hh():
             response = requests.get(BASE_URL_HH, params=params)
             response.raise_for_status()
             time.sleep(0.5)
-            vacancies = response.json()
-            salaries = process_page_hh(response)
+            page_inf = response.json()
+            vacancies = page_inf['items']
+            salaries = process_page_hh(vacancies)
             total_salaries += salaries
-            pages = vacancies['pages']
+            pages = page_inf['pages']
             max_available_pages = 100
             if page == pages - 1 or page > max_available_pages:
-                vacancies_found = vacancies['found']
+                vacancies_found = page_inf['found']
                 break
             page += 1
         salary_sum = sum(total_salaries)
@@ -132,10 +135,11 @@ def collect_salaries_sj(secret_key_sj):
             params['page'] = page
             response = requests.get(BASE_URL_SJ, headers=headers, params=params)
             response.raise_for_status()
-            vacancies = response.json()
-            salaries_sj = process_page_sj(response)
+            page_inf = response.json()
+            vacancies = page_inf['objects']
+            salaries_sj = process_page_sj(vacancies)
             total_salaries += salaries_sj
-            vacancies_found = vacancies['total']
+            vacancies_found = page_inf['total']
             vacancies_on_page = 20
             pages = math.ceil(vacancies_found / vacancies_on_page)
             if page == pages:
@@ -144,6 +148,7 @@ def collect_salaries_sj(secret_key_sj):
         salary_sum = sum(total_salaries)
         vacancies_processed = len(total_salaries)
         if salary_sum:
+
             average_salary = salary_sum / vacancies_processed
         else:
             average_salary = 0
