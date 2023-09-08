@@ -105,7 +105,10 @@ def collect_salaries_hh():
         salary_sum = sum(total_salaries)
         vacancies_processed = len(total_salaries)
         if salary_sum:
-            average_salary = salary_sum / vacancies_processed
+            try:
+                average_salary = salary_sum / vacancies_processed
+            except ZeroDivisionError:
+                average_salary = 0
         else:
             average_salary = 0
         salaries_of_lang[lang] = {
@@ -148,8 +151,10 @@ def collect_salaries_sj(secret_key_sj):
         salary_sum = sum(total_salaries)
         vacancies_processed = len(total_salaries)
         if salary_sum:
-
-            average_salary = salary_sum / vacancies_processed
+            try:
+                average_salary = salary_sum / vacancies_processed
+            except ZeroDivisionError:
+                average_salary = 0
         else:
             average_salary = 0
         salaries_of_lang[lang] = {
