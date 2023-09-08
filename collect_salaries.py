@@ -167,12 +167,12 @@ def get_tables(salaries_of_lang, site_name):
 
 
 def main():
+    load_dotenv()
     salaries_sj = collect_salaries_sj()
     print(get_tables(salaries_sj, 'Superjob Moscow'))
     salaries_hh = collect_salaries_hh()
     print(get_tables(salaries_hh, 'HeadHunter Moscow'))
 
 
-if __name__=='__main__':
-    load_dotenv()
+if __name__ == '__main__':
     main()
